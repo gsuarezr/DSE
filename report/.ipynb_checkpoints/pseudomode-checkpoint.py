@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from qutip import (basis, expect, mesolve, qeye, destroy,
                    tensor, brmesolve)
+from qutip import liouvillian
 from nmm import csolve
 from qutip.solver.heom import BathExponent
 from qutip.solver import heom
@@ -74,7 +75,11 @@ class pseudomode:
         psi02 = tensor(init)
         psi02 = psi02*psi02.dag()
         return psi02.to("CSR")
-
+    def lindbladian(self,cutoff):
+        Heff, d = self.hamiltonian(cutoff)
+        c_ops = [np.sqrt(-2*np.real(i) + 0j)*d[k]
+                 for k, i in enumerate(self.vks)]
+        return liouvillian(H=Heff,c_ops=c_ops)
     def evolution(self, initial, cutoff, t, e_ops=[], options={}):
         Heff, d = self.hamiltonian(cutoff)
         initial = self.prepare(cutoff, initial)

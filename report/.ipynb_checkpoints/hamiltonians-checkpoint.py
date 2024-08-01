@@ -81,13 +81,13 @@ def basis_syk(N):
     return ops
 
 
-def syk_full(N,seed=42):
+def syk_full(N,seed=42,mu=0):
     np.random.seed(seed)
     psis = basis_syk(N)
     k = 2*N
     H = 0
     std = np.sqrt(6)*2/(N)**1.5
-    J = std*np.random.rand(2*N, 2*N, 2*N, 2*N)
+    J = mu+std*np.random.rand(2*N, 2*N, 2*N, 2*N)
     for i in range(0, k):
         for j in range(i+1, k):
             for l in range(j+1, k):
@@ -188,6 +188,8 @@ def syk_binary(N_val, no_plus_coupls, no_minus_coupls, chi_List):
     return C_Np*H_p_m_1
 
 
+### Plot results function, for fidelities,tracedists .. etc I forgot that the brmesolve gives the answer trasposed with respect to HEOM (probably comes from a different convention for the correlation function)
+
 def plot_populations(states,H,times,l=0,m=0):
     labels=["HEOM","Cumulant","Bloch-redfield","Bloch-redfield PS","Pseudomodes"]
     for k,i in enumerate(states):
@@ -202,7 +204,7 @@ def plot_populations(states,H,times,l=0,m=0):
     plt.xlabel(r"t",fontsize=20)
     plt.show()
 
-def plot_ground(states,H,times):
+def plot_ground(states,H,times,param=1):
     E0=np.min(H.eigenenergies()[0])
     labels=["HEOM","Cumulant","Bloch-redfield","Bloch-redfield PS","Pseudomodes"]
     for k,i in enumerate(states):
@@ -211,7 +213,7 @@ def plot_ground(states,H,times):
         except:
             sdd=np.array([(j*H).tr() for j in i])
  
-        plt.plot(times,sdd-E0,label=labels[k])
+        plt.plot(times,(sdd-E0)/param,label=labels[k])
     plt.legend(fontsize=14)
     plt.yscale("log")
     plt.ylabel(r"$\langle H \rangle - E_0$",fontsize=20)
@@ -221,29 +223,36 @@ def plot_ground(states,H,times):
 
 def plot_fidelities(states,H,times):
     labels=["HEOM","Cumulant","Bloch-redfield","Bloch-redfield PS","Pseudomodes"]
+    style=["solid","solid","dashed","dashdot",'dashed']
     for k,i in enumerate(states[1:],1):
-        try:
+        if "Bloch" in  labels[k]:
             sdd=np.array([fidelity(i.states[j],states[0].states[j]) for j in range(len(times))])
-        except:
-            sdd=np.array([fidelity(i[j],states[0].states[j]) for j in range(len(times))])
-        plt.plot(times,sdd,label=labels[k])
+        else:
+            try:
+                sdd=np.array([fidelity(i.states[j],states[0].states[j]) for j in range(len(times))])
+            except:
+                sdd=np.array([fidelity(i[j],states[0].states[j]) for j in range(len(times))])
+        plt.plot(times,sdd,label=labels[k],linestyle=style[k])
     plt.legend(fontsize=14)
     plt.ylabel(r"$\mathcal{F}_{HEOM}$",fontsize=20)
-    plt.yscale("log")
     plt.xlabel(r"t",fontsize=20)
     plt.show()
 
 def plot_trd(states,H,times):
     labels=["HEOM","Cumulant","Bloch-redfield","Bloch-redfield PS","Pseudomodes"]
+    style=["solid","solid","dashed","dashdot",'dashed']
+
     for k,i in enumerate(states[1:],1):
-        try:
+        if "Bloch" in  labels[k]:
             sdd=np.array([tracedist(i.states[j],states[0].states[j]) for j in range(len(times))])
-        except:
-            sdd=np.array([tracedist(i[j],states[0].states[j]) for j in range(len(times))])
-        plt.plot(times,1-sdd,label=labels[k])
+        else:
+            try:
+                sdd=np.array([tracedist(i.states[j],states[0].states[j]) for j in range(len(times))])
+            except:
+                sdd=np.array([tracedist(i[j],states[0].states[j]) for j in range(len(times))])
+        plt.plot(times,1-sdd,label=labels[k],linestyle=style[k])
     plt.legend(fontsize=14)
-    plt.ylabel(r"$\mathcal{Tr}_{HEOM}$",fontsize=20)
-    plt.yscale("log")
+    plt.ylabel(r"$1-\mathcal{Tr}_{HEOM}$",fontsize=20)
     plt.xlabel(r"t",fontsize=20)
     plt.show()
 
@@ -260,4 +269,42 @@ def plot_positivity(states,H,times):
     plt.legend(fontsize=14)
     plt.ylabel(r"$min |E_i|$",fontsize=20)
     plt.xlabel(r"t",fontsize=20)
+    plt.show()
+
+
+def plot_ground_comparison(H,results):
+    labels=["HEOM","Cumulant","Bloch-redfield","Bloch-redfield PS","Pseudomodes"]
+    style=["solid","dotted","dashed","dashdot",'dotted']
+    fig, axs = plt.subplots(1, 3,figsize=(25,5))
+    rho00=(H.eigenstates()[1][0]* H.eigenstates()[1][0].dag())/(H.eigenstates()[1][0]* H.eigenstates()[1][0].dag()).tr()
+    rho01=(H.eigenstates()[1][1]* H.eigenstates()[1][1].dag())/(H.eigenstates()[1][1]* H.eigenstates()[1][1].dag()).tr()
+    ground=(rho01+rho00)/2
+    t=results[0].times
+    for k,result in enumerate(results):
+        if "Bloch" in  labels[k]:
+            f=[fidelity(result.states[i].conj(),rho00) for i in range(len(results[0].states))]
+            f2=[fidelity(result.states[i].conj(),rho01) for i in range(len(results[0].states))]
+            f3=[fidelity(result.states[i].conj(),ground) for i in range(len(results[0].states))]
+        try:
+            f=[fidelity(result.states[i],rho00) for i in range(len(results[0].states))]
+            f2=[fidelity(result.states[i],rho01) for i in range(len(results[0].states))]
+            f3=[fidelity(result.states[i],ground) for i in range(len(results[0].states))]
+        except:
+            f=[fidelity(result[i],rho00) for i in range(len(results[0].states))]
+            f2=[fidelity(result[i],rho01) for i in range(len(results[0].states))]
+            f3=[fidelity(result[i],ground) for i in range(len(results[0].states))]
+        axs[0].plot(t, f,label=labels[k],linestyle=style[k])
+        axs[1].plot(t, f2,label=labels[k],linestyle=style[k])
+        axs[2].plot(t, f3,label=labels[k],linestyle=style[k])
+
+    axs[0].set_xlabel("t")
+    axs[0].set_ylabel(r"$\mathcal{F}_{ground_{1}}$",fontsize=20)
+    axs[1].set_xlabel("t")
+    axs[1].set_ylabel(r"$\mathcal{F}_{ground_{2}}$",fontsize=20)
+    axs[0].set_xlabel("t")
+    axs[2].set_ylabel(r"$\mathcal{F}_{ground}$",fontsize=20)
+    axs[0].legend()
+    axs[1].legend()
+    axs[2].legend()
+    fig.suptitle('Fidelity to the ground state', fontsize=30)
     plt.show()
