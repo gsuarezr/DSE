@@ -6,6 +6,7 @@ from qutip import liouvillian
 from nmm import csolve
 from qutip.solver.heom import BathExponent
 from qutip.solver import heom
+from qutip.core.environment import BosonicEnvironment,CFExponent
 from scipy.integrate import quad
 
 
@@ -90,28 +91,24 @@ class pseudomode:
             Heff, initial, t, c_ops=c_ops, e_ops=e_ops, options=options)
 
 
-class zero_temp_bath(heom.CorrelationFitter):
+class zero_temp_bath:
     def __init__(
-            self, Q, time, lam, gamma, w0, N=2, lower=None, upper=None,
+            self, time, lam, gamma, w0, N=2, lower=None, upper=None,
             sigma=None, guesses=None):
         Gamma = gamma/2
         Omega = np.sqrt(w0**2 - Gamma**2)
-        C = np.array([self._matsubara_zero_integrand(
-            i, lam, gamma, w0) for i in time])
-        self.correlation_function = C+self.C0(time, lam, gamma, w0)
-        super().__init__(Q, 0, time, C)
-        self.fbath, self.finfo = self.get_fit(
-            Ni=1, Nr=N, lower=lower, upper=upper, sigma=sigma, guesses=guesses)
+        
+        vectorized=np.vectorize(lambda i:self._matsubara_zero_integrand(i,lam,gamma,w0),otypes=[complex])
+        bb5 = BosonicEnvironment.from_correlation_function(vectorized,time, T=0,tMax=gamma*10)
+        bbfit,finfo =bb5.approx_by_cf_fit(time,Ni_max=1,Nr_max=N,target_rsme=None,
+                                          lower=lower,upper=upper,guess=guesses)
         ck = (lam**2)/(2*Omega)
         vk = (-Gamma+1j*Omega)
-        C0_contrib = [
-            BathExponent(
-                type="R", dim=None, Q=Q, ck=ck / 2, vk=-vk),
-            BathExponent(
-                type="R", dim=None, Q=Q, ck=ck / 2, vk=-np.conjugate(vk))]
-        self.fbath.exponents.extend(C0_contrib)
-        self.exponents = self.fbath.exponents
-        self.bath = self.fbath
+        C0_contrib=[CFExponent(type="R",ck=ck,vk=-np.conjugate(vk))]
+        bbfit.exponents.extend(C0_contrib)
+        self.exponents = bbfit.exponents
+        self.bath = bbfit
+        self.fitinfo = finfo
 
     def _matsubara_zero_integrand(
             self, t, coup_strength, bath_broad, bath_freq):
